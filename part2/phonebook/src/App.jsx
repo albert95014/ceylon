@@ -10,8 +10,8 @@ const Filter = ({value, handleChange}) => (
   </form>
 )
 
-const PersonForm = ({persons, newName, newNumber, handleNameChange, handleNumberChange, confirmName, addName}) => (
-  <form onSubmit={persons.map(person => person.name).includes(`${newName}`) ? ()=>confirmName(newName, newNumber) : addName}>
+const PersonForm = ({persons, newName, newNumber, handleNameChange, handleNumberChange, addName}) => (
+  <form onSubmit={addName}>
     <div>
       name: <input value={newName} onChange={handleNameChange} />
     </div>
@@ -37,12 +37,52 @@ const Persons = ({filteredPersons, removePerson}) => {
   )
 }
 
+const SuccessNotification = ({message}) => {
+  const messageStyle = {
+    color: 'green',
+    background: 'lightgray',
+    border: '2px green solid',
+    height: '36px',
+    fontSize: '24px'
+  }
+
+  if (message===null) {
+    return null
+  } 
+  return (
+    <div style={messageStyle}>
+      {message}
+    </div>
+  )
+}
+
+const ErrorNotification = ({message}) => {
+  const messageStyle = {
+    color: 'red',
+    background: 'lightgray',
+    border: '2px red solid',
+    height: '36px',
+    fontSize: '24px'
+  }
+
+  if (message===null) {
+    return null
+  } 
+  return (
+    <div style={messageStyle}>
+      {message}
+    </div>
+  )
+}
+
 const App = () => {
   const [persons, setPersons] = useState([]) 
   const [newName, setNewName] = useState('')
   const [newNumber, setNewNumber] = useState('')
   const [filterName, setFilterName] = useState('')
   const [filteredPersons, setFilteredPersons] = useState(persons)
+  const [successMessage, setSuccessMessage] = useState(null)
+  const [errorMessage, setErrorMessage] = useState(null)
 
   const hook = () => {
     console.log('effect')
@@ -54,6 +94,9 @@ const App = () => {
         setPersons(response.data)
         setFilteredPersons(response.data)
       })
+      .catch(error => {
+        alert('Failed to get names')
+      })
   }
 
   useEffect(hook, [])
@@ -64,32 +107,56 @@ const App = () => {
     console.log(persons.map(person => person.name))
     const nameObject = {
       name: newName,
-      number: newNumber,
-      id: persons.length + 1
+      number: newNumber
     }
 
-    nameService 
-      .create(nameObject)
-      .then(response => {
-        console.log(response.data)
-      })
-
-    setPersons(persons.concat(nameObject))
-    setFilteredPersons(filteredPersons.concat(nameObject))
-    setNewName('')
-    setNewNumber('')
-  }
-
-  const confirmName = (name, newNumber) => {
-    if (window.confirm(`${newName} is already added to the phonebook. Would you like to update the old number with ${newNumber}?`)) {
-      const person = filteredPersons.find(person => person.name === name)
-      const changedNumber = {...person, number: newNumber}
-      nameService
-        .update(person.id, changedNumber)
-        .then(response => {
-          console.log(response)
-        })
-    }
+    if (persons.map(person => person.name).includes(`${newName}`)) {
+      if (window.confirm(`${newName} is already added to the phonebook. Would you like to update the old number with ${newNumber}?`)) {
+        const selectedPerson = filteredPersons.find(person => person.name === (`${newName}`))
+        const changedNumber = {...selectedPerson, number: newNumber}
+        nameService
+          .update(selectedPerson.id, changedNumber)
+          .then(response => {
+            console.log(response.data)
+            setSuccessMessage(
+              `Changed ${newName}'s number to ${newNumber}`
+            )
+            setTimeout(() => {
+              setSuccessMessage(null)
+            }, 5000)
+            setPersons(persons.map(person => person.id !== selectedPerson.id ? person : response.data))
+            setFilteredPersons(filteredPersons.map(person => person.id !== selectedPerson.id ? person : response.data))
+            setNewName('')
+            setNewNumber('')
+          })
+          .catch(error => {
+            setErrorMessage(
+              `${newName}'s information has already been removed from the server`
+            )
+            setTimeout(() => {
+              setErrorMessage(null)
+            }, 5000)
+            setPersons(persons.filter(person => person.id !== selectedPerson.id))
+            setFilteredPersons(filteredPersons.filter(person => person.id !== selectedPerson.id))
+          })
+        }
+      } else {
+        nameService 
+          .create(nameObject)
+          .then(response => {
+            console.log(response.data)
+            setSuccessMessage(
+                `Added ${newName}`
+              )
+              setTimeout(() => {
+                setSuccessMessage(null)
+              }, 5000)
+            setPersons(persons.concat(response.data))
+            setFilteredPersons(filteredPersons.concat(response.data))
+            setNewName('')
+            setNewNumber('')
+          })
+      }
   }
 
   const handleNameChange = (event) => {
@@ -109,7 +176,7 @@ const App = () => {
   }
 
   const removePerson = (id, name) => {
-    console.log("banana")
+    console.log("id", id)
 
     if (window.confirm(`Delete ${name}?`))
       nameService
@@ -123,6 +190,8 @@ const App = () => {
   return (
     <div>
       <h2>Phonebook</h2>
+      <SuccessNotification message={successMessage} />
+      <ErrorNotification message={errorMessage} />
       <Filter value={filterName} handleChange={handleFilterNameChange} />
       <h2>Add a new</h2>
       <PersonForm persons={persons}
@@ -130,7 +199,7 @@ const App = () => {
                   newNumber={newNumber} 
                   handleNameChange={handleNameChange} 
                   handleNumberChange={handleNumberChange} 
-                  confirmName={confirmName} 
+                  // confirmName={confirmName} 
                   addName={addName} />
       <h2>Numbers</h2>
       <Persons filteredPersons={filteredPersons} removePerson={removePerson} />
